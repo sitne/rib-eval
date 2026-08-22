@@ -107,7 +107,74 @@ a.sub:hover { color:#38bdf8; }
 .note { color:#8fa3ad; font-size:12.5px; line-height:1.6; max-width:900px; }
 .legend { display:flex; gap:18px; font-size:12px; color:#8fa3ad; margin:8px 0;}
 .swatch { display:inline-block; width:22px; height:10px; border-radius:3px; margin-right:6px; vertical-align:middle;}
+.lang-switch { display:flex; gap:8px; align-items:center; justify-content:flex-end; margin-bottom:12px; font-size:13px; }
+.lang-switch a { color:#8fa3ad; text-decoration:none; padding:4px 10px; border:1px solid #2a3a48; border-radius:6px; }
+.lang-switch a.active { color:#ece8e1; background:#1b2733; border-color:#38bdf8; }
+.lang-switch a:hover { color:#38bdf8; border-color:#38bdf8; }
 """
+
+I18N = {
+    "en": {
+        "html_lang": "en",
+        "title": "WPA Report — rib-eval",
+        "holdout": "holdout only",
+        "chips": {"rounds": "rounds", "kills": "kills attributed", "players": "players", "swings": "swings"},
+        "h_top": "Top players by WPA",
+        "h_bottom": "Top players by WPA",
+        "th_player": "player",
+        "th_wpa": "WPA",
+        "th_k": "K",
+        "th_d": "D",
+        "th_avgk": "avg/K",
+        "h_swings": "Biggest WP swings — auto-highlight candidates",
+        "legend_curve": "P(A wins) curve",
+        "legend_kills": "kills",
+        "legend_plant": "spike plant",
+        "legend_defuse": "defuse",
+        "legend_swing": "swing tick",
+        "h_timing": "Engagement timing — who picks high-stakes fights?",
+        "th_timing_player": "player (≥50 K)",
+        "th_ale": "ALE all*",
+        "th_e": "E (<25s)",
+        "th_m": "M (25–75s)",
+        "th_l": "L (75s+)",
+        "th_exec": "execution",
+        "note_ale": "*<b>ALE</b> (average leverage of engagements): the median win-probability swing a typical kill produces in the situations this player chose to fight in (alive-difference × round-time buckets), split by phase — E/M/L columns show whether they hunt stakes early or late. It is independent of whether the player won those duels: it measures <i>when</i> they engage, not the outcome. <b>Execution</b> = actual |ΔP| ÷ ALE — phase-neutral by construction; converting the stakes they picked into real swings. League average ALE ≈ {avg:.3f}. Role caveat: entry duelists naturally take earlier, lower-leverage fights than lurkers — compare within roles.",
+        "h_notes": "Notes",
+        "notes": "WPA is computed on <b>holdout matches only</b> (20% of matches by seed 42) to avoid leakage; per-tick predictions still cover all ticks of each holdout round. Plants, defuses and utility value are not yet credited. Probabilities are uncalibrated — treat absolute percentages as directional. Model: pooled Transformer ({n:,} holdout rounds, holdout AUC ≈ 0.87). Data: rib.gg 2D replay exports. Timeout rounds: if freezetimeEndT &gt; 90s it is treated as timeout-overwritten and excluded (see build_sequence.py).",
+        "fmeta": "red bands = kills · green = plant · blue = defuse · yellow dots = swings",
+    },
+    "ja": {
+        "html_lang": "ja",
+        "title": "WPAレポート — rib-eval",
+        "holdout": "holdoutのみ",
+        "chips": {"rounds": "ラウンド", "kills": "キル（帰属）", "players": "選手", "swings": "スイング"},
+        "h_top": "WPA 上位プレイヤー",
+        "h_bottom": "WPA 上位プレイヤー",
+        "th_player": "選手",
+        "th_wpa": "WPA",
+        "th_k": "K",
+        "th_d": "D",
+        "th_avgk": "平均/K",
+        "h_swings": "最大の勝率変動 — 自動ハイライト候補",
+        "legend_curve": "P(A勝利)カーブ",
+        "legend_kills": "キル",
+        "legend_plant": "スパイク設置",
+        "legend_defuse": "解除",
+        "legend_swing": "スイング",
+        "h_timing": "交戦タイミング — 誰が高レバレッジな局面で仕掛けているか",
+        "th_timing_player": "選手 (≥50K)",
+        "th_ale": "ALE 全体*",
+        "th_e": "序盤 (<25s)",
+        "th_m": "中盤 (25–75s)",
+        "th_l": "終盤 (75s+)",
+        "th_exec": "実行力",
+        "note_ale": "*<b>ALE</b>（平均交戦レバレッジ）: その選手が仕掛けた局面で、典型的なキルがどれだけ勝率を動かすかの中央値（人数差×ラウンド時間でバケット化）。勝敗とは独立して<i>いつ</i>仕掛けたかを測ります。<b>実行力</b> = 実測 |ΔP| ÷ ALE — フェーズに依らない指標です。リーグ平均 ALE ≈ {avg:.3f}。注意: エントリーは自然と序盤の低レバレッジ帯に寄るため、ロール内での比較を推奨。",
+        "h_notes": "補足",
+        "notes": "WPAは<b>holdoutマッチのみ</b>（seed 42で20%）で算出しており、リークを回避しています。設置・解除・ユーティリティの価値は未加算。確率は未較正のため絶対値は方向性の目安としてご覧ください。モデル: pooled Transformer（holdout {n:,}ラウンド、AUC ≈ 0.87）。データ: rib.gg 2Dリプレイ。タイムアウトラウンドは freezetimeEndT &gt; 90s で除外しています。",
+        "fmeta": "赤帯=キル · 緑=設置 · 青=解除 · 黄点=スイング",
+    },
+}
 
 
 def fmt_date(iso):
@@ -131,7 +198,11 @@ def match_label(match_id, match_info):
     return " — ".join([parts[0], *parts[1:]]), f"rib #{match_id}"
 
 
-def build_html(ranked, swings, metas, W, d, args, n_rounds, match_info=None, timing_rows=None, sig=None, holdout_idx=None):
+def build_html(ranked, swings, metas, W, d, args, n_rounds, match_info=None, timing_rows=None, sig=None, holdout_idx=None, lang="en"):
+    tr = I18N[lang]
+    other = "ja" if lang == "en" else "en"
+    other_label = "日本語" if lang == "en" else "English"
+    other_href = "./ja/" if lang == "en" else "../"
     max_abs = max(abs(v["wpa"]) for _, v in ranked) or 1.0
 
     def sig_html(name):
@@ -230,10 +301,10 @@ def build_html(ranked, swings, metas, W, d, args, n_rounds, match_info=None, tim
 
     total_kills = sum(s["kills"] for _, s in ranked)
     chips = (
-        f"<div class='chip'><b>{n_rounds:,}</b> rounds</div>"
-        f"<div class='chip'><b>{total_kills:,}</b> kills attributed</div>"
-        f"<div class='chip'><b>{len(ranked):,}</b> players</div>"
-        f"<div class='chip'><b>{len(swings):,}</b> swings ≥ {args.swing_threshold:.2f}</div>"
+        f"<div class='chip'><b>{n_rounds:,}</b> {tr['chips']['rounds']}</div>"
+        f"<div class='chip'><b>{total_kills:,}</b> {tr['chips']['kills']}</div>"
+        f"<div class='chip'><b>{len(ranked):,}</b> {tr['chips']['players']}</div>"
+        f"<div class='chip'><b>{len(swings):,}</b> {tr['chips']['swings']} ≥ {args.swing_threshold:.2f}</div>"
     )
 
     timing_html = ""
@@ -258,56 +329,50 @@ def build_html(ranked, swings, metas, W, d, args, n_rounds, match_info=None, tim
                 f"<td class='num'><span class='{exec_cls}'>×{t['exec']:.2f}</span></td></tr>"
             )
         timing_html = f"""
-<h2>Engagement timing — who picks high-stakes fights?</h2>
+<h2>{tr['h_timing']}</h2>
 <div class="grid2"><div class="card">
-<table><tr><th>player (≥50 K)</th><th class="num">K</th>
-<th class="num">ALE all*</th><th class="num">E (&lt;25s)</th><th class="num">M (25–75s)</th><th class="num">L (75s+)</th>
-<th class="num">execution</th></tr>
+<table><tr><th>{tr['th_timing_player']}</th><th class="num">K</th>
+<th class="num">{tr['th_ale']}</th><th class="num">{tr['th_e']}</th><th class="num">{tr['th_m']}</th><th class="num">{tr['th_l']}</th>
+<th class="num">{tr['th_exec']}</th></tr>
 {''.join(rows)}
 </table></div></div>
-<p class="note">*<b>ALE</b> (average leverage of engagements): the median win-probability swing a typical kill
-produces in the situations this player chose to fight in (alive-difference × round-time buckets), split by
-phase — E/M/L columns show whether they hunt stakes early or late. It is independent of whether the player
-won those duels: it measures <i>when</i> they engage, not the outcome. <b>Execution</b> = actual |ΔP| ÷ ALE —
-phase-neutral by construction; converting the stakes they picked into real swings.
-League average ALE ≈ {league_ale:.3f}. Role caveat: entry duelists naturally take earlier,
-lower-leverage fights than lurkers — compare within roles.</p>"""
+<p class="note">{tr['note_ale'].format(avg=league_ale)}</p>"""
+
+    lang_switch = f'<div class="lang-switch"><a href="{other_href}" class="active">{other_label}</a><span style="color:#555">·</span><span>{tr["title"]}</span></div>' if False else f'<div class="lang-switch"><a href="{other_href}">{other_label}</a></div>'
 
     doc = f"""<!DOCTYPE html>
-<html lang="ja"><head><meta charset="utf-8">
-<title>WPA Report — rib-eval</title><style>{CSS}</style></head><body>
-<h1>rib-eval <span>//</span> Win Probability Added Report <span style="font-size:12px;color:#8fa3ad">· holdout only</span></h1>
+<html lang="{tr['html_lang']}"><head><meta charset="utf-8">
+<title>{tr['title']}</title><style>{CSS}</style></head><body>
+{lang_switch}
+<h1>rib-eval <span>//</span> Win Probability Added Report <span style="font-size:12px;color:#8fa3ad">· {tr['holdout']}</span></h1>
 <div class="chips">{chips}</div>
 
-<h2>Top players by WPA</h2>
+<h2>{tr['h_top']}</h2>
 <div class="grid2">
-<div class="card"><table><tr><th>player</th><th class="num">WPA</th><th></th><th class="num">K</th><th class="num">D</th><th class="num">avg/K</th></tr>
+<div class="card"><table><tr><th>{tr['th_player']}</th><th class="num">{tr['th_wpa']}</th><th></th><th class="num">{tr['th_k']}</th><th class="num">{tr['th_d']}</th><th class="num">{tr['th_avgk']}</th></tr>
 {top_html}</table></div>
-<div class="card"><table><tr><th>player</th><th class="num">WPA</th><th></th><th class="num">K</th><th class="num">D</th><th class="num">avg/K</th></tr>
+<div class="card"><table><tr><th>{tr['th_player']}</th><th class="num">{tr['th_wpa']}</th><th></th><th class="num">{tr['th_k']}</th><th class="num">{tr['th_d']}</th><th class="num">{tr['th_avgk']}</th></tr>
 {bot_html}</table></div>
 </div>
 
-<h2>Biggest WP swings — auto-highlight candidates</h2>
-<div class="legend"><span><span class="swatch" style="background:#38bdf8"></span>P(A wins) curve</span>
-<span><span class="swatch" style="background:#ff4655;opacity:.35"></span>kills</span>
-<span><span class="swatch" style="background:#22c55e;opacity:.5"></span>spike plant</span>
-<span><span class="swatch" style="background:#60a5fa;opacity:.5"></span>defuse</span>
-<span><span class="swatch" style="background:#fbbf24"></span>swing tick</span></div>
+<h2>{tr['h_swings']}</h2>
+<div class="legend"><span><span class="swatch" style="background:#38bdf8"></span>{tr['legend_curve']}</span>
+<span><span class="swatch" style="background:#ff4655;opacity:.35"></span>{tr['legend_kills']}</span>
+<span><span class="swatch" style="background:#22c55e;opacity:.5"></span>{tr['legend_plant']}</span>
+<span><span class="swatch" style="background:#60a5fa;opacity:.5"></span>{tr['legend_defuse']}</span>
+<span><span class="swatch" style="background:#fbbf24"></span>{tr['legend_swing']}</span></div>
 {timing_html}
 <div class="featured">{''.join(featured)}</div>
 
-<h2>Notes</h2>
-<p class="note">WPA is computed on <b>holdout matches only</b> (20% of matches by seed 42) to avoid leakage;
-per-tick predictions still cover all ticks of each holdout round.
-Plants, defuses and utility value are not yet credited.
-Probabilities are uncalibrated — treat absolute percentages as directional.
-Model: pooled Transformer ({len([m for m in holdout_idx if m]):,} holdout rounds, holdout AUC ≈ 0.87).
-Data: rib.gg 2D replay exports.
-Timeout rounds: if freezetimeEndT &gt; 15s it is treated as timeout-overwritten and replaced (see build_sequence.py).</p>
+<h2>{tr['h_notes']}</h2>
+<p class="note">{tr['notes'].format(n=len([m for m in holdout_idx if m]))}</p>
 </body></html>"""
-    path = OUT / "wpa_report.html"
+    if lang == "en":
+        path = OUT / "wpa_report.html"
+    else:
+        path = OUT / "wpa_report_ja.html"
     path.write_text(doc, encoding="utf-8")
-    print(f"report -> {path}")
+    print(f"report [{lang}] -> {path}")
 
 
 def main():
@@ -315,6 +380,7 @@ def main():
     ap.add_argument("--swing-threshold", type=float, default=0.12)
     ap.add_argument("--top-players", type=int, default=15)
     ap.add_argument("--top-swing-cards", type=int, default=8)
+    ap.add_argument("--lang", choices=["en", "ja", "all"], default="all")
     args = ap.parse_args()
 
     d = np.load(DATA / "sequences.npz", allow_pickle=True)
@@ -441,7 +507,9 @@ def main():
     swings.sort(key=lambda s: abs(s["delta"]), reverse=True)
     mi_path = DATA / "match_info.json"
     match_info = json.loads(mi_path.read_text()) if mi_path.exists() else {}
-    build_html(ranked, swings, metas, W, d, args, len(metas), match_info, timing_rows, sig, holdout_idx)
+    langs = ["en", "ja"] if args.lang == "all" else [args.lang]
+    for lg in langs:
+        build_html(ranked, swings, metas, W, d, args, len(metas), match_info, timing_rows, sig, holdout_idx, lang=lg)
 
 
 if __name__ == "__main__":
