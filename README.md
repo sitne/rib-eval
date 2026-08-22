@@ -1,5 +1,7 @@
 # rib-eval
 
+English | [日本語](README.ja.md) | [中文](README.zh.md)
+
 Win-probability ("eval graph") models for **professional VALORANT**, trained on public 2D replay data from [rib.gg](https://rib.gg).
 
 Think of the eval bar in chess, but for VALORANT rounds: for every 5-second tick of every round, a model estimates **P(team A wins)** from the board state — player positions, view directions, alive counts, HP/armor, and economy. The result is a shogi-style evaluation graph per round, plus player impact rankings based on how much each kill moved the win probability.
