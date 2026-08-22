@@ -83,6 +83,9 @@ def run(tag, map_filter, data, epochs=20, batch=128, lr=1e-3, seed=42):
 
     best_auc, best_state, patience = 0.0, None, 0
     n = len(xt)
+    if n == 0:
+        print(f"[{tag}] no training samples (n==0), skipping")
+        return tag, 0.0, 0.0, 0, len(yv) if "yv" in locals() else 0
     for ep in range(epochs):
         model.train()
         perm = torch.randperm(n, device=dev)
@@ -107,6 +110,9 @@ def run(tag, map_filter, data, epochs=20, batch=128, lr=1e-3, seed=42):
             patience += 1
             if patience >= 4:
                 break
+    if best_state is None:
+        print(f"[{tag}] no improvement, skipping save")
+        return tag, 0.0, 0.0, int(va.sum()) if "va" in locals() else 0, len(yv) if "yv" in locals() else 0
     model.load_state_dict(best_state)
     model.eval()
     vl = evaluate()

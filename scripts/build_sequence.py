@@ -16,6 +16,8 @@ TMAX = 44
 NPLAYERS = 10
 F = 9
 MAPS = ["ascent", "split", "haven", "sunset", "summit", "lotus"]
+FREEZE_FALLBACK_MS = 8000
+FREEZE_TIMEOUT_CUTOFF_MS = 90000
 
 
 def build_round(rd, rnd, bx, by, span_x, span_y, actors, roster):
@@ -24,6 +26,8 @@ def build_round(rd, rnd, bx, by, span_x, span_y, actors, roster):
         return None
     duration = rnd["durationMs"]
     freeze_end = rnd.get("freezetimeEndT") or 0
+    if freeze_end > FREEZE_TIMEOUT_CUTOFF_MS:
+        return None
     kills = [
         {
             "t": e["t"],

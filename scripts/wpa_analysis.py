@@ -131,7 +131,7 @@ def match_label(match_id, match_info):
     return " — ".join([parts[0], *parts[1:]]), f"rib #{match_id}"
 
 
-def build_html(ranked, swings, metas, W, d, args, n_rounds, match_info=None, timing_rows=None, sig=None):
+def build_html(ranked, swings, metas, W, d, args, n_rounds, match_info=None, timing_rows=None, sig=None, holdout_idx=None):
     max_abs = max(abs(v["wpa"]) for _, v in ranked) or 1.0
 
     def sig_html(name):
@@ -172,8 +172,11 @@ def build_html(ranked, swings, metas, W, d, args, n_rounds, match_info=None, tim
         if len(featured) >= args.top_swing_cards:
             break
         idx = next(
-            i for i, r in enumerate(metas) if r["match"] == s["match"] and r["roundNum"] == s["round"]
+            (i for i, r in enumerate(metas) if r["match"] == s["match"] and r["roundNum"] == s["round"]),
+            None,
         )
+        if idx is None or not holdout_idx[idx]:
+            continue
         valid = d["mask"][idx].astype(bool)
         wp = W[idx][valid]
         diffs = np.abs(np.diff(wp))
@@ -273,7 +276,7 @@ lower-leverage fights than lurkers — compare within roles.</p>"""
     doc = f"""<!DOCTYPE html>
 <html lang="ja"><head><meta charset="utf-8">
 <title>WPA Report — rib-eval</title><style>{CSS}</style></head><body>
-<h1>rib-eval <span>//</span> Win Probability Added Report</h1>
+<h1>rib-eval <span>//</span> Win Probability Added Report <span style="font-size:12px;color:#8fa3ad">· holdout only</span></h1>
 <div class="chips">{chips}</div>
 
 <h2>Top players by WPA</h2>
@@ -294,10 +297,13 @@ lower-leverage fights than lurkers — compare within roles.</p>"""
 <div class="featured">{''.join(featured)}</div>
 
 <h2>Notes</h2>
-<p class="note">WPA attributes each kill's surrounding Δ win-probability (+/-5s window) to the killer and victim;
-plants, defuses and utility value are not yet credited. Probabilities are uncalibrated — treat absolute
-percentages as directional. Model: pooled Transformer ({len(metas):,} rounds, holdout AUC ≈ 0.87).
-Data: rib.gg 2D replay exports.</p>
+<p class="note">WPA is computed on <b>holdout matches only</b> (20% of matches by seed 42) to avoid leakage;
+per-tick predictions still cover all ticks of each holdout round.
+Plants, defuses and utility value are not yet credited.
+Probabilities are uncalibrated — treat absolute percentages as directional.
+Model: pooled Transformer ({len([m for m in holdout_idx if m]):,} holdout rounds, holdout AUC ≈ 0.87).
+Data: rib.gg 2D replay exports.
+Timeout rounds: if freezetimeEndT &gt; 15s it is treated as timeout-overwritten and replaced (see build_sequence.py).</p>
 </body></html>"""
     path = OUT / "wpa_report.html"
     path.write_text(doc, encoding="utf-8")
@@ -315,6 +321,14 @@ def main():
     metas = [json.loads(l) for l in open(DATA / "rounds_meta.jsonl")]
     assert len(metas) == len(d["y"])
 
+    matches_all = d["match"]
+    uniq_all = sorted(set(matches_all))
+    rng = np.random.default_rng(42)
+    rng.shuffle(uniq_all)
+    holdout = set(uniq_all[int(len(uniq_all) * 0.8) :])
+    holdout_idx = np.array([m in holdout for m in matches_all])
+    print(f"holdout filter: {holdout_idx.sum()}/{len(holdout_idx)} rounds (matches {len(holdout)})")
+
     model = load_model()
     W = predict_all(model, d["X"], d["attacker"])
     print(f"predicted {W.shape} win-prob curves")
@@ -325,6 +339,8 @@ def main():
     kill_records = []
     X_all, mask_all = d["X"], d["mask"]
     for i, r in enumerate(metas):
+        if not holdout_idx[i]:
+            continue
         if i % 2000 == 0:
             print(f"... round {i}/{len(metas)}", flush=True)
         valid = mask_all[i].astype(bool)
@@ -425,7 +441,7 @@ def main():
     swings.sort(key=lambda s: abs(s["delta"]), reverse=True)
     mi_path = DATA / "match_info.json"
     match_info = json.loads(mi_path.read_text()) if mi_path.exists() else {}
-    build_html(ranked, swings, metas, W, d, args, len(metas), match_info, timing_rows, sig)
+    build_html(ranked, swings, metas, W, d, args, len(metas), match_info, timing_rows, sig, holdout_idx)
 
 
 if __name__ == "__main__":
