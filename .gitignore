@@ -1,0 +1,9 @@
+.venv/
+__pycache__/
+data/replays/
+data/raw/
+data/*.npz
+data/rounds_meta.jsonl
+outputs/*.pt
+outputs/*.json
+nohup.out
