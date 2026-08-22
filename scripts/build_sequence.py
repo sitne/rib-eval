@@ -18,7 +18,7 @@ F = 9
 MAPS = ["ascent", "split", "haven", "sunset", "summit", "lotus"]
 
 
-def build_round(rd, rnd, bmin, bmax, span_x, span_y, actors, roster):
+def build_round(rd, rnd, bx, by, span_x, span_y, actors, roster):
     winner = rnd["winner"]
     if winner not in ("A", "B"):
         return None
@@ -57,8 +57,8 @@ def build_round(rd, rnd, bmin, bmax, span_x, span_y, actors, roster):
             eco = (st or {}).get("loadoutValue", 0) / 20000.0
             sn = snap_at(ev_by_actor, actor, t_ms)
             if sn and alive:
-                xn = (sn["pos"]["x"] - bmin) / span_x
-                yn = (sn["pos"]["y"] - bmin) / span_y
+                xn = (sn["pos"]["x"] - bx) / span_x
+                yn = (sn["pos"]["y"] - by) / span_y
                 sx, sy = view_angle_sin_cos(sn["viewVector"])
             else:
                 xn = yn = sx = sy = 0.0
