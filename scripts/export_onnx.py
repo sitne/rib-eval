@@ -19,7 +19,7 @@ def main():
     model.load_state_dict(torch.load(MODEL, map_location="cpu", weights_only=True))
     model.eval()
 
-    x = torch.randn(2, 44, 10, 9, dtype=torch.float32)
+    x = torch.randn(2, 44, 10, 18, dtype=torch.float32)
     at = torch.zeros(2, dtype=torch.int64)
 
     torch.onnx.export(

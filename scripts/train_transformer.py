@@ -16,7 +16,7 @@ NPLAYERS = 10
 
 
 class WinPredictor(nn.Module):
-    def __init__(self, f=9, d=128, layers=3, heads=4, dropout=0.1):
+    def __init__(self, f=18, d=128, layers=3, heads=4, dropout=0.1):
         super().__init__()
         self.proj = nn.Linear(f, d)
         self.pos = nn.Embedding(TMAX, d)
