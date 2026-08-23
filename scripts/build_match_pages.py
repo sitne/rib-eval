@@ -76,8 +76,39 @@ def build_one(match_id, out_path):
     y_sub=d["y"][idxs]
 
     title, sub_id = match_label(str(match_id), match_info)
-    # collect cards
+    # team names for human-readable winner (A = first team in title)
+    def _team_names(mid):
+        t = (match_info.get(str(mid), {}) or {}).get("title") or ""
+        if " vs " in t:
+            a, b = t.split(" vs ", 1)
+            for sep in [" – ", " — ", " - ", " | "]:
+                if sep in b:
+                    b = b.split(sep, 1)[0]
+                    break
+            return a.strip(), b.strip()
+        return "Team A", "Team B"
+    teamA, teamB = _team_names(match_id)
+    # natural map order: m1, m2, m3 (haven → summit …)
+    map_order = {}
+    for i, pf in enumerate(sorted(DATA.glob(f"replays/{match_id}-m*.json"))):
+        try:
+            m = json.loads(pf.read_text())["replayData"]["map"]
+        except Exception:
+            continue
+        if m not in map_order:
+            map_order[m] = i
+    idxs.sort(key=lambda i: (map_order.get(metas[i]["map"], 99), metas[i]["roundNum"]))
+    # per-map score for headers
+    from collections import Counter
+    map_scores = Counter()
+    for j, idx in enumerate(idxs):
+        m = metas[idx]["map"]
+        w = "A" if y_sub[j]==1 else "B"
+        map_scores[m + ":" + w] += 1
+    # collect cards grouped by map
     cards=[]
+    cur_map = None
+    round_cnt = 0
     for j, idx in enumerate(idxs):
         r=metas[idx]
         valid=masks[j].astype(bool)
@@ -105,7 +136,17 @@ def build_one(match_id, out_path):
                     elif e["type"]=="defuse":
                         defuse_ts.append(tu)
                 break
+        # map section header when map changes (natural order: haven → summit)
+        if r["map"] != cur_map:
+            cur_map = r["map"]
+            wA = map_scores.get(cur_map+":A",0)
+            wB = map_scores.get(cur_map+":B",0)
+            oi = map_order.get(cur_map,0)+1
+            cards.append(f"<h2 style='grid-column:1/-1;margin:18px 0 2px;color:#8fa3ad'>Map {oi} · {html.escape(cur_map)} — {html.escape(teamA)} {wA}–{wB} {html.escape(teamB)}</h2>")
         winner="A" if y_sub[j]==1 else "B"
+        attacker="A" if at_sub[j]==1 else "B"
+        winnerTeam = teamA if winner=="A" else teamB
+        winnerSide = "ATK" if winner==attacker else "DEF"
         # swing dots
         swing_idx=list(np.where(np.abs(np.diff(wp))>=0.12)[0]+1)
         # hover data: elapsed seconds for each tick, plant elapsed if any
@@ -126,7 +167,8 @@ def build_one(match_id, out_path):
             diffs=np.abs(np.diff(wp))
             bi=np.argmax(diffs)
             before_after=f"P(A) {wp[bi]:.2f} → {wp[bi+1]:.2f} @ {clock((start_ms+ (bi+1)*TICK_MS)/1000 - start_ms/1000)}"
-        cards.append(f"<div class='card'><div class='card-head'><span class='card-title'>R{r['roundNum']} · {html.escape(r['map'])} · winner={winner}{spike_label}</span><span class='badge badge-{winner}'>{winner}</span></div>{curve}<div class='meta'>{before_after} · red=kills green=plant blue=defuse yellow=swing (≥0.12) · hover for M:SS</div></div>")
+        cards.append(f"<div class='card'><div class='card-head'><span class='card-title'>R{r['roundNum']} · {html.escape(winnerTeam)} won <span style='color:#8fa3ad;font-weight:400'>({winnerSide})</span> · {html.escape(r['map'])}{spike_label}</span><span class='badge badge-{winner}'>{winnerSide}</span></div>{curve}<div class='meta'>{before_after} · red=kills green=plant blue=defuse yellow=swing (≥0.12) · hover for M:SS</div></div>")
+        round_cnt += 1
 
     hover_js = r"""
 <script>
@@ -142,8 +184,9 @@ document.querySelectorAll('.curve-wrap').forEach(wrap=>{
   const pad=10, W=760;
   function showAt(clientX){
     const rect=svg.getBoundingClientRect();
-    const x=Math.max(pad, Math.min(W-pad, (clientX - rect.left)/rect.width * W));
-    const idx=Math.max(0,Math.min(n-1, Math.round((x-pad)/(W-2*pad)*(n-1))));
+    const xRaw=Math.max(pad, Math.min(W-pad, (clientX - rect.left)/rect.width * W));
+    const idx=Math.max(0,Math.min(n-1, Math.round((xRaw-pad)/(W-2*pad)*(n-1))));
+    const x = pad + idx/(n>1?n-1:1)*(W-2*pad);
     const p=wp[idx];
     const elapsed=times[idx];
     let line1, line2, spikeCls='';
@@ -161,10 +204,10 @@ document.querySelectorAll('.curve-wrap').forEach(wrap=>{
     line2=`P(A) ${(p*100).toFixed(1)}%${dstr}`;
     tip.innerHTML=line1+`<br>`+line2;
     tip.className='tip'+spikeCls;
-    tip.style.left=x+'px';
+    tip.style.left=(x/W*100)+'%';
     tip.style.top='8px';
     tip.style.display='block';
-    vline.style.left=x+'px';
+    vline.style.left=(x/W*100)+'%';
     vline.style.display='block';
   }
   wrap.addEventListener('mousemove', e=>showAt(e.clientX));
@@ -174,7 +217,7 @@ document.querySelectorAll('.curve-wrap').forEach(wrap=>{
 </script>
 """
     html_doc=f"""<!DOCTYPE html><html lang="ja"><head><meta charset="utf-8"><title>{html.escape(title)} — rib-eval</title><style>{CSS}</style></head><body>
-<h1>{html.escape(title)} <span style="color:#8fa3ad;font-size:14px">· {sub_id} · {len(cards)} rounds</span></h1>
+<h1>{html.escape(title)} <span style="color:#8fa3ad;font-size:14px">· {sub_id} · {round_cnt} rounds</span></h1>
 <p><a href=\"/\">← Back to report</a> · <a href=\"https://rib.gg/matches/{match_id}\" target=\"_blank\">rib.gg #{match_id}</a></p>
 <div class="legend"><span><span class="swatch" style="background:#38bdf8"></span>P(A) curve</span><span><span class="swatch" style="background:#ff4655;opacity:.35"></span>kills</span><span><span class="swatch" style="background:#22c55e;opacity:.5"></span>plant</span><span><span class="swatch" style="background:#60a5fa;opacity:.5"></span>defuse</span><span><span class="swatch" style="background:#fbbf24"></span>swing</span></div>
 <div class="grid">{''.join(cards)}</div>

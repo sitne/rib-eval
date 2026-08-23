@@ -121,8 +121,9 @@ document.querySelectorAll('.curve-wrap').forEach(wrap=>{
   const n=wp.length; const pad=10, W=760;
   function showAt(clientX){
     const rect=svg.getBoundingClientRect();
-    const x=Math.max(pad, Math.min(W-pad, (clientX - rect.left)/rect.width * W));
-    const idx=Math.max(0,Math.min(n-1, Math.round((x-pad)/(W-2*pad)*(n-1))));
+    const xRaw=Math.max(pad, Math.min(W-pad, (clientX - rect.left)/rect.width * W));
+    const idx=Math.max(0,Math.min(n-1, Math.round((xRaw-pad)/(W-2*pad)*(n-1))));
+    const x = pad + idx/(n>1?n-1:1)*(W-2*pad);
     const p=wp[idx]; const elapsed=times[idx];
     let line1, spikeCls='';
     if(plant!==null && elapsed>=plant){
@@ -136,8 +137,8 @@ document.querySelectorAll('.curve-wrap').forEach(wrap=>{
     const dstr= idx>0 ? (delta>=0?` <span style="color:#4ade80">▲${(delta*100).toFixed(1)}%</span>`:` <span style="color:#f87171">▼${(Math.abs(delta)*100).toFixed(1)}%</span>`) : '';
     const line2=`P(A) ${(p*100).toFixed(1)}%${dstr}`;
     tip.innerHTML=line1+`<br>`+line2; tip.className='tip'+spikeCls;
-    tip.style.left=x+'px'; tip.style.top='8px'; tip.style.display='block';
-    vline.style.left=x+'px'; vline.style.display='block';
+    tip.style.left=(x/W*100)+'%'; tip.style.top='8px'; tip.style.display='block';
+    vline.style.left=(x/W*100)+'%'; vline.style.display='block';
   }
   wrap.addEventListener('mousemove', e=>showAt(e.clientX));
   wrap.addEventListener('mouseleave', ()=>{ tip.style.display='none'; vline.style.display='none'; });
