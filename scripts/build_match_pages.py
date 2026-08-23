@@ -97,78 +97,96 @@ def build_one(match_id, out_path):
             continue
         if m not in map_order:
             map_order[m] = i
-    idxs.sort(key=lambda i: (map_order.get(metas[i]["map"], 99), metas[i]["roundNum"]))
-    # per-map score for headers
+    # all rounds from raw (including timeout-excluded ones) for complete display
+    all_raw=[]
+    for pf in sorted(DATA.glob(f"replays/{match_id}-m*.json")):
+        try:
+            prd=json.loads(pf.read_text())["replayData"]
+        except Exception:
+            continue
+        for rnd in prd["rounds"]:
+            all_raw.append((prd["map"], rnd["roundNum"], rnd))
+    all_raw.sort(key=lambda x: (map_order.get(x[0],99), x[1]))
+    # per-map score for headers (include all rounds, even timeout)
     from collections import Counter
     map_scores = Counter()
-    for j, idx in enumerate(idxs):
-        m = metas[idx]["map"]
-        w = "A" if y_sub[j]==1 else "B"
-        map_scores[m + ":" + w] += 1
+    for m, rn, rr in all_raw:
+        w = rr.get("winner")
+        if w in ("A","B"):
+            map_scores[m + ":" + w] += 1
+    idxs.sort(key=lambda i: (map_order.get(metas[i]["map"], 99), metas[i]["roundNum"]))
+    lookup={(metas[idx]["map"], metas[idx]["roundNum"]): j for j, idx in enumerate(idxs)}
     # collect cards grouped by map
     cards=[]
     cur_map = None
     round_cnt = 0
-    for j, idx in enumerate(idxs):
-        r=metas[idx]
-        valid=masks[j].astype(bool)
-        wp=W[j][valid]
-        n=len(wp)
-        if n<2:
-            continue
-        start_ms=r["startMs"]
-        kill_ts=[(k["t"]-start_ms)/TICK_MS for k in r["kills"] if k["t"]>start_ms]
-        # spike/defuse
-        spike_ts=[]; defuse_ts=[]; spike_label=""
-        for pf in DATA.glob(f"replays/{match_id}-m*.json"):
-            try:
-                prd=json.loads(pf.read_text())["replayData"]
-            except: continue
-            if prd.get("map")!=r["map"]:
-                continue
-            rnd=next((rr for rr in prd["rounds"] if rr["roundNum"]==r["roundNum"]),None)
-            if rnd:
-                for e in rnd["events"]:
-                    if e["t"]<=start_ms: continue
-                    tu=(e["t"]-start_ms)/TICK_MS
-                    if e["type"]=="plant":
-                        spike_ts.append(tu); spike_label=f" · spike @ {clock((e['t']-start_ms)/1000)}"
-                    elif e["type"]=="defuse":
-                        defuse_ts.append(tu)
-                break
-        # map section header when map changes (natural order: haven → summit)
-        if r["map"] != cur_map:
-            cur_map = r["map"]
+    for map_name, round_num, rnd_raw in all_raw:
+        # map header
+        if map_name != cur_map:
+            cur_map = map_name
             wA = map_scores.get(cur_map+":A",0)
             wB = map_scores.get(cur_map+":B",0)
             oi = map_order.get(cur_map,0)+1
+            # totals include timeout rounds for header score
+            totA = sum(1 for m,r,_ in all_raw if m==cur_map and r==rnd_raw["roundNum"] and False)
             cards.append(f"<h2 style='grid-column:1/-1;margin:18px 0 2px;color:#8fa3ad'>Map {oi} · {html.escape(cur_map)} — {html.escape(teamA)} {wA}–{wB} {html.escape(teamB)}</h2>")
-        winner="A" if y_sub[j]==1 else "B"
-        attacker="A" if at_sub[j]==1 else "B"
-        winnerTeam = teamA if winner=="A" else teamB
-        winnerSide = "ATK" if winner==attacker else "DEF"
-        # swing dots
-        swing_idx=list(np.where(np.abs(np.diff(wp))>=0.12)[0]+1)
-        # hover data: elapsed seconds for each tick, plant elapsed if any
-        elapsed = [(i*TICK_MS)/1000 for i in range(n)]
-        plant_elapsed = spike_ts[0]*TICK_MS/1000 if spike_ts else None
-        # embed wp/times/plant as JSON for JS
-        wp_json = json.dumps([round(float(v),4) for v in wp])
-        times_json = json.dumps(elapsed)
-        plant_json = str(plant_elapsed) if plant_elapsed is not None else "null"
-        curve_svg=svg_curve(wp, kill_times=(kill_ts,len(wp)) if kill_ts else None,
-                        spike_times=(spike_ts,len(wp)) if spike_ts else None,
-                        defuse_times=(defuse_ts,len(wp)) if defuse_ts else None,
-                        swing_idx=swing_idx)
-        # wrap with hover layer
-        curve = f'<div class="curve-wrap" data-wp=\'{wp_json}\' data-times=\'{times_json}\' data-plant=\'{plant_json}\'>{curve_svg}<div class="vline"></div><div class="tip"></div></div>'
-        before_after=""
-        if len(swing_idx):
-            diffs=np.abs(np.diff(wp))
-            bi=np.argmax(diffs)
-            before_after=f"P(A) {wp[bi]:.2f} → {wp[bi+1]:.2f} @ {clock((start_ms+ (bi+1)*TICK_MS)/1000 - start_ms/1000)}"
-        cards.append(f"<div class='card'><div class='card-head'><span class='card-title'>R{r['roundNum']} · {html.escape(winnerTeam)} won <span style='color:#8fa3ad;font-weight:400'>({winnerSide})</span> · {html.escape(r['map'])}{spike_label}</span><span class='badge badge-{winner}'>{winnerSide}</span></div>{curve}<div class='meta'>{before_after} · red=kills green=plant blue=defuse yellow=swing (≥0.12) · hover for M:SS</div></div>")
-        round_cnt += 1
+        j = lookup.get((map_name, round_num))
+        if j is not None:
+            r=metas[idxs[j]]
+            valid=masks[j].astype(bool)
+            wp=W[j][valid]
+            n=len(wp)
+            if n<2:
+                continue
+            start_ms=r["startMs"]
+            kill_ts=[(k["t"]-start_ms)/TICK_MS for k in r["kills"] if k["t"]>start_ms]
+            spike_ts=[]; defuse_ts=[]; spike_label=""
+            for pf in DATA.glob(f"replays/{match_id}-m*.json"):
+                try:
+                    prd=json.loads(pf.read_text())["replayData"]
+                except: continue
+                if prd.get("map")!=r["map"]:
+                    continue
+                rnd=next((rr for rr in prd["rounds"] if rr["roundNum"]==r["roundNum"]),None)
+                if rnd:
+                    for e in rnd["events"]:
+                        if e["t"]<=start_ms: continue
+                        tu=(e["t"]-start_ms)/TICK_MS
+                        if e["type"]=="plant":
+                            spike_ts.append(tu); spike_label=f" · spike @ {clock((e['t']-start_ms)/1000)}"
+                        elif e["type"]=="defuse":
+                            defuse_ts.append(tu)
+                    break
+            winner="A" if y_sub[j]==1 else "B"
+            attacker="A" if at_sub[j]==1 else "B"
+            winnerTeam = teamA if winner=="A" else teamB
+            winnerSide = "ATK" if winner==attacker else "DEF"
+            swing_idx=list(np.where(np.abs(np.diff(wp))>=0.12)[0]+1)
+            elapsed = [(i*TICK_MS)/1000 for i in range(n)]
+            plant_elapsed = spike_ts[0]*TICK_MS/1000 if spike_ts else None
+            wp_json = json.dumps([round(float(v),4) for v in wp])
+            times_json = json.dumps(elapsed)
+            plant_json = str(plant_elapsed) if plant_elapsed is not None else "null"
+            curve_svg=svg_curve(wp, kill_times=(kill_ts,len(wp)) if kill_ts else None,
+                            spike_times=(spike_ts,len(wp)) if spike_ts else None,
+                            defuse_times=(defuse_ts,len(wp)) if defuse_ts else None,
+                            swing_idx=swing_idx)
+            curve = f'<div class="curve-wrap" data-wp=\'{wp_json}\' data-times=\'{times_json}\' data-plant=\'{plant_json}\'>{curve_svg}<div class="vline"></div><div class="tip"></div></div>'
+            before_after=""
+            if len(swing_idx):
+                diffs=np.abs(np.diff(wp))
+                bi=np.argmax(diffs)
+                before_after=f"P(A) {wp[bi]:.2f} → {wp[bi+1]:.2f} @ {clock((start_ms+ (bi+1)*TICK_MS)/1000 - start_ms/1000)}"
+            cards.append(f"<div class='card'><div class='card-head'><span class='card-title'>R{round_num} · {html.escape(winnerTeam)} won <span style='color:#8fa3ad;font-weight:400'>({winnerSide})</span> · {html.escape(map_name)}{spike_label}</span><span class='badge badge-{winner}'>{winnerSide}</span></div>{curve}<div class='meta'>{before_after} · red=kills green=plant blue=defuse yellow=swing (≥0.12) · hover for M:SS</div></div>")
+            round_cnt += 1
+        else:
+            ft = rnd_raw.get("freezetimeEndT") or 0
+            dur = rnd_raw.get("durationMs") or 0
+            win = rnd_raw.get("winner") or "?"
+            winTeam = teamA if win=="A" else teamB if win=="B" else "?"
+            reason = "timeout" if ft and ft>90000 else "filtered"
+            cards.append(f"<div class='card' style='opacity:0.55'><div class='card-head'><span class='card-title'>R{round_num} · {html.escape(map_name)} · {html.escape(winTeam)} won</span><span class='badge badge-{win}'>{win}</span></div><div style='height:150px;display:flex;align-items:center;justify-content:center;background:#0b1319;border-radius:8px;color:#8fa3ad;font-size:12px;text-align:center'>Timeout — win prob not computed<br><span style='font-size:11px'>freezetime {ft/1000:.0f}s · dur {dur/1000:.0f}s · {reason}</span></div><div class='meta'>winType {rnd_raw.get('winType')} · raw events {len(rnd_raw.get('events',[]))}</div></div>")
+            round_cnt += 1
 
     hover_js = r"""
 <script>
