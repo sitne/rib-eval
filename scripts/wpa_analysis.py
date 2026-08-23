@@ -59,6 +59,13 @@ def svg_curve(wp, kill_times=None, spike_times=None, defuse_times=None, swing_id
     parts.append(
         f'<line x1="{pad}" y1="{mid:.1f}" x2="{width - pad}" y2="{mid:.1f}" stroke="#555" stroke-dasharray="4 4"/>'
     )
+    # post-plant background
+    if spike_times and spike_times[0]:
+        t0s, step_s = spike_times
+        px = pad + (t0s[0] / step_s) * (width - 2 * pad)
+        px = min(max(px, pad), width - pad)
+        parts.append(f'<rect x="{px:.1f}" y="4" width="{width - pad - px:.1f}" height="{height - 8}" fill="#f59e0b" fill-opacity="0.14"/>')
+        parts.append(f'<text x="{px:.1f}" y="14" fill="#f59e0b" font-size="9" text-anchor="middle">SPIKE</text>')
     for lst, color, op in ((spike_times, "#22c55e", "0.30"), (defuse_times, "#60a5fa", "0.30"), (kill_times or [], "#ff4655", "0.25")):
         if not lst:
             continue
@@ -68,6 +75,13 @@ def svg_curve(wp, kill_times=None, spike_times=None, defuse_times=None, swing_id
             x = min(max(x, pad), width - pad)
             parts.append(f'<line x1="{x:.1f}" y1="4" x2="{x:.1f}" y2="{height - 4}" stroke="{color}" stroke-opacity="{op}" stroke-width="7"/>')
     parts.append(f'<polyline points="{pts}" fill="none" stroke="#38bdf8" stroke-width="2.5"/>')
+    # x-axis labels
+    parts.append(f'<text x="{pad}" y="{height - 2}" fill="#8fa3ad" font-size="8">1:40</text>')
+    parts.append(f'<text x="{width - pad}" y="{height - 2}" fill="#8fa3ad" font-size="8" text-anchor="end">0:00</text>')
+    if spike_times and spike_times[0]:
+        t0s, step_s = spike_times
+        px = pad + (t0s[0] / step_s) * (width - 2 * pad)
+        parts.append(f'<text x="{px:.1f}" y="{height - 2}" fill="#f59e0b" font-size="8" text-anchor="middle">0:45</text>')
     for si in swing_idx or []:
         parts.append(
             f'<circle cx="{xs[si]:.1f}" cy="{ys[si]:.1f}" r="5" fill="#fbbf24" stroke="#111" stroke-width="1.5"/>'
