@@ -42,14 +42,20 @@ def clock(sec):
     return f"{sec // 60}:{sec % 60:02d}"
 
 
-def svg_curve(wp, kill_times=None, spike_times=None, defuse_times=None, swing_idx=None, width=760, height=150):
+def svg_curve(wp, kill_times=None, spike_times=None, defuse_times=None, swing_idx=None, width=760, height=150, hover=False, elapsed=None, plant_elapsed=None):
     pad = 10
     n = len(wp)
     xs = [pad + i * (width - 2 * pad) / (n - 1) for i in range(n)]
     ys = [height - pad - v * (height - 2 * pad) for v in wp]
     pts = " ".join(f"{x:.1f},{y:.1f}" for x, y in zip(xs, ys))
     mid = height - pad - 0.5 * (height - 2 * pad)
-    parts = [f'<svg viewBox="0 0 {width} {height}" class="curve" preserveAspectRatio="none">']
+    if hover and elapsed is not None:
+        wp_json = json.dumps([round(float(v),4) for v in wp])
+        times_json = json.dumps([round(float(v),1) for v in elapsed])
+        pe = str(round(float(plant_elapsed),1)) if plant_elapsed is not None else "null"
+        parts = [f'<div class="curve-wrap" data-wp=\'{wp_json}\' data-times=\'{times_json}\' data-plant=\'{pe}\'><svg viewBox="0 0 {width} {height}" class="curve hoverable" preserveAspectRatio="none">']
+    else:
+        parts = [f'<svg viewBox="0 0 {width} {height}" class="curve" preserveAspectRatio="none">']
     parts.append(
         f'<line x1="{pad}" y1="{mid:.1f}" x2="{width - pad}" y2="{mid:.1f}" stroke="#555" stroke-dasharray="4 4"/>'
     )
@@ -66,7 +72,10 @@ def svg_curve(wp, kill_times=None, spike_times=None, defuse_times=None, swing_id
         parts.append(
             f'<circle cx="{xs[si]:.1f}" cy="{ys[si]:.1f}" r="5" fill="#fbbf24" stroke="#111" stroke-width="1.5"/>'
         )
-    parts.append("</svg>")
+    if hover and elapsed is not None:
+        parts.append('</svg><div class="vline"></div><div class="tip"></div></div>')
+    else:
+        parts.append("</svg>")
     return "".join(parts)
 
 
@@ -107,6 +116,13 @@ a.sub:hover { color:#38bdf8; }
 .note { color:#8fa3ad; font-size:12.5px; line-height:1.6; max-width:900px; }
 .legend { display:flex; gap:18px; font-size:12px; color:#8fa3ad; margin:8px 0;}
 .swatch { display:inline-block; width:22px; height:10px; border-radius:3px; margin-right:6px; vertical-align:middle;}
+.curve-wrap { position:relative; }
+.curve.hoverable { cursor:crosshair; }
+.tip { position:absolute; background:#1b2733; border:1px solid #2a3a48; border-radius:8px; padding:6px 8px; font-size:12px; line-height:1.4; pointer-events:none; transform:translate(-50%,-110%); display:none; white-space:nowrap; z-index:5; box-shadow:0 4px 12px rgba(0,0,0,.4); }
+.tip.spike { border-color:#f59e0b; background:#1c1910; }
+.tip .t-main { font-family:monospace; font-weight:700; font-size:13px; }
+.tip .t-sub { color:#8fa3ad; font-size:11px; }
+.vline { position:absolute; top:0; bottom:0; width:1px; background:#ece8e1; opacity:.6; pointer-events:none; display:none; }
 .lang-switch { display:flex; gap:8px; align-items:center; justify-content:flex-end; margin-bottom:12px; font-size:13px; }
 .lang-switch a { color:#8fa3ad; text-decoration:none; padding:4px 10px; border:1px solid #2a3a48; border-radius:6px; }
 .lang-switch a.active { color:#ece8e1; background:#1b2733; border-color:#38bdf8; }
@@ -281,12 +297,32 @@ def build_html(ranked, swings, metas, W, d, args, n_rounds, match_info=None, tim
                     elif e["type"] == "defuse":
                         defuse_ts.append(tu)
             break
+        elapsed = [(metas[idx]["startMs"] + i * TICK_MS - metas[idx]["startMs"]) / 1000 for i in range(len(wp))]
+        plant_el = None
+        # find plant elapsed for this round
+        for pf in DATA.glob(f"replays/{s['match']}-m*.json"):
+            try:
+                prd2 = json.loads(pf.read_text())["replayData"]
+            except:
+                continue
+            if prd2.get("map") != s["map"]:
+                continue
+            rnd2 = next((rr for rr in prd2["rounds"] if rr["roundNum"] == s["round"]), None)
+            if rnd2:
+                for e in rnd2["events"]:
+                    if e["type"] == "plant":
+                        plant_el = (e["t"] - metas[idx]["startMs"]) / 1000
+                        break
+                break
         curve = svg_curve(
             wp,
             kill_times=(kill_ts, len(wp)),
             spike_times=(spike_ts, len(wp)) if spike_ts else None,
             defuse_times=(defuse_ts, len(wp)) if defuse_ts else None,
             swing_idx=si,
+            hover=True,
+            elapsed=elapsed,
+            plant_elapsed=plant_el,
         )
         winner = "A" if d["y"][idx] == 1 else "B"
         label, sub_id = match_label(s["match"], match_info)
@@ -343,6 +379,43 @@ def build_html(ranked, swings, metas, W, d, args, n_rounds, match_info=None, tim
 
     lang_switch = f'<div class="lang-switch"><a href="{other_href}" class="active">{other_label}</a><span style="color:#555">·</span><span>{tr["title"]}</span></div>' if False else f'<div class="lang-switch"><a href="{other_href}">{other_label}</a></div>'
 
+    hover_js = r"""
+<script>
+function fmt(sec){ sec=Math.max(0,Math.round(sec)); return Math.floor(sec/60)+':'+String(sec%60).padStart(2,'0'); }
+document.querySelectorAll('.curve-wrap').forEach(wrap=>{
+  const wp=JSON.parse(wrap.dataset.wp);
+  const times=JSON.parse(wrap.dataset.times);
+  const plant=wrap.dataset.plant==='null'?null:parseFloat(wrap.dataset.plant);
+  const tip=wrap.querySelector('.tip');
+  const vline=wrap.querySelector('.vline');
+  const svg=wrap.querySelector('svg');
+  const n=wp.length; const pad=10, W=760;
+  function showAt(clientX){
+    const rect=svg.getBoundingClientRect();
+    const x=Math.max(pad, Math.min(W-pad, (clientX - rect.left)/rect.width * W));
+    const idx=Math.max(0,Math.min(n-1, Math.round((x-pad)/(W-2*pad)*(n-1))));
+    const p=wp[idx]; const elapsed=times[idx];
+    let line1, spikeCls='';
+    if(plant!==null && elapsed>=plant){
+      const spikeRem=Math.max(0,45-(elapsed-plant));
+      line1=`<span class="t-main" style="color:#fbbf24">SPIKE ${fmt(spikeRem)}</span> <span class="t-sub">(+${fmt(elapsed-plant)} · ${fmt(elapsed)} elapsed)</span>`; spikeCls=' spike';
+    } else {
+      const remain=Math.max(0,100-elapsed);
+      line1=`<span class="t-main">${fmt(remain)}</span> <span class="t-sub">remaining · ${fmt(elapsed)} elapsed</span>`;
+    }
+    const delta= idx>0 ? (p - wp[idx-1]) : 0;
+    const dstr= idx>0 ? (delta>=0?` <span style="color:#4ade80">▲${(delta*100).toFixed(1)}%</span>`:` <span style="color:#f87171">▼${(Math.abs(delta)*100).toFixed(1)}%</span>`) : '';
+    const line2=`P(A) ${(p*100).toFixed(1)}%${dstr}`;
+    tip.innerHTML=line1+`<br>`+line2; tip.className='tip'+spikeCls;
+    tip.style.left=x+'px'; tip.style.top='8px'; tip.style.display='block';
+    vline.style.left=x+'px'; vline.style.display='block';
+  }
+  wrap.addEventListener('mousemove', e=>showAt(e.clientX));
+  wrap.addEventListener('mouseleave', ()=>{ tip.style.display='none'; vline.style.display='none'; });
+  wrap.addEventListener('touchmove', e=>{ if(e.touches[0]) showAt(e.touches[0].clientX); }, {passive:true});
+});
+</script>
+"""
     doc = f"""<!DOCTYPE html>
 <html lang="{tr['html_lang']}"><head><meta charset="utf-8">
 <title>{tr['title']}</title><style>{CSS}</style></head><body>
@@ -369,6 +442,7 @@ def build_html(ranked, swings, metas, W, d, args, n_rounds, match_info=None, tim
 
 <h2>{tr['h_notes']}</h2>
 <p class="note">{tr['notes'].format(n=len([m for m in holdout_idx if m]))}</p>
+{hover_js}
 </body></html>"""
     if lang == "en":
         path = OUT / "wpa_report.html"
