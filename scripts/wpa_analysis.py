@@ -138,6 +138,7 @@ I18N = {
         "th_e": "E (<25s)",
         "th_m": "M (25–75s)",
         "th_l": "L (75s+)",
+        "th_p": "Post",
         "th_exec": "execution",
         "note_ale": "*<b>ALE</b> (average leverage of engagements): the median win-probability swing a typical kill produces in the situations this player chose to fight in (alive-difference × round-time buckets), split by phase — E/M/L columns show whether they hunt stakes early or late. It is independent of whether the player won those duels: it measures <i>when</i> they engage, not the outcome. <b>Execution</b> = actual |ΔP| ÷ ALE — phase-neutral by construction; converting the stakes they picked into real swings. League average ALE ≈ {avg:.3f}. Role caveat: entry duelists naturally take earlier, lower-leverage fights than lurkers — compare within roles.",
         "h_notes": "Notes",
@@ -168,6 +169,7 @@ I18N = {
         "th_e": "序盤 (<25s)",
         "th_m": "中盤 (25–75s)",
         "th_l": "終盤 (75s+)",
+        "th_p": "設置後",
         "th_exec": "実行力",
         "note_ale": "*<b>ALE</b>（平均交戦レバレッジ）: その選手が仕掛けた局面で、典型的なキルがどれだけ勝率を動かすかの中央値（人数差×ラウンド時間でバケット化）。勝敗とは独立して<i>いつ</i>仕掛けたかを測ります。<b>実行力</b> = 実測 |ΔP| ÷ ALE — フェーズに依らない指標です。リーグ平均 ALE ≈ {avg:.3f}。注意: エントリーは自然と序盤の低レバレッジ帯に寄るため、ロール内での比較を推奨。",
         "h_notes": "補足",
@@ -326,13 +328,14 @@ def build_html(ranked, swings, metas, W, d, args, n_rounds, match_info=None, tim
                 f"<td class='num'>{ph(t['ale_e'])}</td>"
                 f"<td class='num'>{ph(t['ale_m'])}</td>"
                 f"<td class='num'>{ph(t['ale_l'])}</td>"
+                f"<td class='num'>{ph(t['ale_p'])}</td>"
                 f"<td class='num'><span class='{exec_cls}'>×{t['exec']:.2f}</span></td></tr>"
             )
         timing_html = f"""
 <h2>{tr['h_timing']}</h2>
 <div class="grid2"><div class="card">
 <table><tr><th>{tr['th_timing_player']}</th><th class="num">K</th>
-<th class="num">{tr['th_ale']}</th><th class="num">{tr['th_e']}</th><th class="num">{tr['th_m']}</th><th class="num">{tr['th_l']}</th>
+<th class="num">{tr['th_ale']}</th><th class="num">{tr['th_e']}</th><th class="num">{tr['th_m']}</th><th class="num">{tr['th_l']}</th><th class="num">{tr['th_p']}</th>
 <th class="num">{tr['th_exec']}</th></tr>
 {''.join(rows)}
 </table></div></div>
@@ -460,9 +463,13 @@ def main():
             diff = int(round(alive_a - alive_b))
             if k["killer_team"] != "A":
                 diff = -diff
-            diff = max(-5, min(5, diff))
-            t_sec = times[j] / 1000.0
-            tb = min(int(t_sec // 25), 3)
+            diff = max(-4, min(4, diff))
+            if r.get("plantMs") is not None and k["t"] >= r["plantMs"]:
+                spike_elapsed = (k["t"] - r["plantMs"]) / 1000.0
+                tb = 4 + min(int(spike_elapsed // 15), 2)
+            else:
+                t_sec = times[j] / 1000.0
+                tb = min(int(t_sec // 25), 3)
             kill_records.append(
                 {"name": kn, "abs_delta": abs(delta), "situation": (diff, tb)}
             )
@@ -484,9 +491,17 @@ def main():
             continue
         ale = sum(league_L[r["situation"]] for r in recs) / len(recs)
         actual = sum(r["abs_delta"] for r in recs) / len(recs)
-        ph = {"E": [0.0, 0], "M": [0.0, 0], "L": [0.0, 0]}
+        ph = {"E": [0.0, 0], "M": [0.0, 0], "L": [0.0, 0], "P": [0.0, 0]}
         for r in recs:
-            p = "E" if r["situation"][1] == 0 else ("L" if r["situation"][1] == 3 else "M")
+            tb = r["situation"][1]
+            if tb >= 4:
+                p = "P"
+            elif tb == 0:
+                p = "E"
+            elif tb == 3:
+                p = "L"
+            else:
+                p = "M"
             ph[p][0] += league_L[r["situation"]]
             ph[p][1] += 1
         timing_rows.append(
@@ -499,6 +514,7 @@ def main():
                 "ale_e": ph["E"][0] / ph["E"][1] if ph["E"][1] else None,
                 "ale_m": ph["M"][0] / ph["M"][1] if ph["M"][1] else None,
                 "ale_l": ph["L"][0] / ph["L"][1] if ph["L"][1] else None,
+                "ale_p": ph["P"][0] / ph["P"][1] if ph["P"][1] else None,
             }
         )
     timing_rows.sort(key=lambda x: x["ale"], reverse=True)
