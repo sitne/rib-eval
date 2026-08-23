@@ -8,7 +8,7 @@ import numpy as np
 import torch
 
 from train_transformer import WinPredictor, predict
-from wpa_analysis import clock, svg_curve, fmt_date, match_label, TICK_MS
+from wpa_analysis import clock, svg_curve, fmt_date, match_label, player_name, TICK_MS
 
 ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / "outputs"
@@ -167,11 +167,19 @@ def build_one(match_id, out_path):
             wp_json = json.dumps([round(float(v),4) for v in wp])
             times_json = json.dumps(elapsed)
             plant_json = str(plant_elapsed) if plant_elapsed is not None else "null"
+            # kill details for hover near kill
+            kill_details=[]
+            for k in r["kills"]:
+                if k["t"] <= start_ms: continue
+                tu=(k["t"]-start_ms)/TICK_MS
+                xk=10 + tu/len(wp)*(760-20)
+                kill_details.append({"x": round(xk,1), "killer": player_name(r["roster"], k["killer"]), "victim": player_name(r["roster"], k["victim"]), "t": round((k["t"]-start_ms)/1000,1)})
+            kills_detail_json = json.dumps(kill_details, ensure_ascii=False).replace("'", "&#39;")
             curve_svg=svg_curve(wp, kill_times=(kill_ts,len(wp)) if kill_ts else None,
                             spike_times=(spike_ts,len(wp)) if spike_ts else None,
                             defuse_times=(defuse_ts,len(wp)) if defuse_ts else None,
                             swing_idx=swing_idx)
-            curve = f'<div class="curve-wrap" data-wp=\'{wp_json}\' data-times=\'{times_json}\' data-plant=\'{plant_json}\'>{curve_svg}<div class="vline"></div><div class="tip"></div></div>'
+            curve = f'<div class="curve-wrap" data-wp=\'{wp_json}\' data-times=\'{times_json}\' data-plant=\'{plant_json}\' data-kills-detail=\'{kills_detail_json}\'>{curve_svg}<div class="vline"></div><div class="tip"></div></div>'
             before_after=""
             if len(swing_idx):
                 diffs=np.abs(np.diff(wp))
@@ -203,8 +211,21 @@ document.querySelectorAll('.curve-wrap').forEach(wrap=>{
   function showAt(clientX){
     const rect=svg.getBoundingClientRect();
     const xRaw=Math.max(pad, Math.min(W-pad, (clientX - rect.left)/rect.width * W));
-    const idx=Math.max(0,Math.min(n-1, Math.round((xRaw-pad)/(W-2*pad)*(n-1))));
-    const x = pad + idx/(n>1?n-1:1)*(W-2*pad);
+    let idx=Math.max(0,Math.min(n-1, Math.round((xRaw-pad)/(W-2*pad)*(n-1))));
+    let x = pad + idx/(n>1?n-1:1)*(W-2*pad);
+    // snap to nearest kill if close
+    try{
+      const kills=JSON.parse(wrap.dataset.killsDetail||"[]");
+      let best=null, bestDist=30;
+      for(const k of kills){
+        const d=Math.abs(k.x - xRaw);
+        if(d<bestDist){ bestDist=d; best=k; }
+      }
+      if(best){
+        x=best.x;
+        idx=Math.max(0,Math.min(n-1, Math.round((x-pad)/(W-2*pad)*(n-1))));
+      }
+    }catch(e){}
     const p=wp[idx];
     const elapsed=times[idx];
     let line1, line2, spikeCls='';
@@ -219,7 +240,18 @@ document.querySelectorAll('.curve-wrap').forEach(wrap=>{
     }
     const delta = idx>0 ? (p - wp[idx-1]) : 0;
     const dstr = idx>0 ? (delta>=0?` <span style="color:#4ade80">▲${(delta*100).toFixed(1)}%</span>`:` <span style="color:#f87171">▼${(Math.abs(delta)*100).toFixed(1)}%</span>`) : '';
-    line2=`P(A) ${(p*100).toFixed(1)}%${dstr}`;
+    let killInfo='';
+    try{
+      const kills=JSON.parse(wrap.dataset.killsDetail||"[]");
+      let bestK=null, bestD=30;
+      const curX = pad + idx/(n>1?n-1:1)*(W-2*pad);
+      for(const k of kills){
+        const d=Math.abs(k.x - curX);
+        if(d<bestD){ bestD=d; bestK=k; }
+      }
+      if(bestK) killInfo=` · <span style="color:#f87171">${bestK.killer} → ${bestK.victim}</span> @${bestK.t}s`;
+    }catch(e){}
+    line2=`P(A) ${(p*100).toFixed(1)}%${dstr}${killInfo}`;
     tip.innerHTML=line1+`<br>`+line2;
     tip.className='tip'+spikeCls;
     tip.style.left=(x/W*100)+'%';

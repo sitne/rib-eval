@@ -42,7 +42,7 @@ def clock(sec):
     return f"{sec // 60}:{sec % 60:02d}"
 
 
-def svg_curve(wp, kill_times=None, spike_times=None, defuse_times=None, swing_idx=None, width=760, height=150, hover=False, elapsed=None, plant_elapsed=None):
+def svg_curve(wp, kill_times=None, spike_times=None, defuse_times=None, swing_idx=None, width=760, height=150, hover=False, elapsed=None, plant_elapsed=None, kills_detail=None):
     pad = 10
     n = len(wp)
     xs = [pad + i * (width - 2 * pad) / (n - 1) for i in range(n)]
@@ -53,7 +53,8 @@ def svg_curve(wp, kill_times=None, spike_times=None, defuse_times=None, swing_id
         wp_json = json.dumps([round(float(v),4) for v in wp])
         times_json = json.dumps([round(float(v),1) for v in elapsed])
         pe = str(round(float(plant_elapsed),1)) if plant_elapsed is not None else "null"
-        parts = [f'<div class="curve-wrap" data-wp=\'{wp_json}\' data-times=\'{times_json}\' data-plant=\'{pe}\'><svg viewBox="0 0 {width} {height}" class="curve hoverable" preserveAspectRatio="none">']
+        kd = f" data-kills-detail='{kills_detail}'" if kills_detail else ""
+        parts = [f'<div class="curve-wrap" data-wp=\'{wp_json}\' data-times=\'{times_json}\' data-plant=\'{pe}\'{kd}><svg viewBox="0 0 {width} {height}" class="curve hoverable" preserveAspectRatio="none">']
     else:
         parts = [f'<svg viewBox="0 0 {width} {height}" class="curve" preserveAspectRatio="none">']
     parts.append(
@@ -75,6 +76,8 @@ def svg_curve(wp, kill_times=None, spike_times=None, defuse_times=None, swing_id
             x = min(max(x, pad), width - pad)
             parts.append(f'<line x1="{x:.1f}" y1="4" x2="{x:.1f}" y2="{height - 4}" stroke="{color}" stroke-opacity="{op}" stroke-width="7"/>')
     parts.append(f'<polyline points="{pts}" fill="none" stroke="#38bdf8" stroke-width="2.5"/>')
+    for i in range(n):
+        parts.append(f'<circle cx="{xs[i]:.1f}" cy="{ys[i]:.1f}" r="1.8" fill="#38bdf8" fill-opacity="0.35"/>')
     # x-axis labels
     parts.append(f'<text x="{pad}" y="{height - 2}" fill="#8fa3ad" font-size="8">1:40</text>')
     parts.append(f'<text x="{width - pad}" y="{height - 2}" fill="#8fa3ad" font-size="8" text-anchor="end">0:00</text>')
@@ -328,6 +331,14 @@ def build_html(ranked, swings, metas, W, d, args, n_rounds, match_info=None, tim
                         plant_el = (e["t"] - metas[idx]["startMs"]) / 1000
                         break
                 break
+        # kill details for hover near kill
+        kill_details=[]
+        for k in metas[idx].get("kills",[]):
+            if k["t"] <= metas[idx]["startMs"]: continue
+            tu=(k["t"]-metas[idx]["startMs"])/TICK_MS
+            xk=10 + tu/len(wp)*(760-20)
+            kill_details.append({"x": round(xk,1), "killer": player_name(metas[idx]["roster"], k["killer"]), "victim": player_name(metas[idx]["roster"], k["victim"]), "t": round((k["t"]-metas[idx]["startMs"])/1000,1)})
+        kills_detail_json = json.dumps(kill_details, ensure_ascii=False).replace("'", "&#39;")
         curve = svg_curve(
             wp,
             kill_times=(kill_ts, len(wp)),
@@ -337,6 +348,7 @@ def build_html(ranked, swings, metas, W, d, args, n_rounds, match_info=None, tim
             hover=True,
             elapsed=elapsed,
             plant_elapsed=plant_el,
+            kills_detail=kills_detail_json,
         )
         winner = "A" if d["y"][idx] == 1 else "B"
         label, sub_id = match_label(s["match"], match_info)
@@ -403,27 +415,60 @@ document.querySelectorAll('.curve-wrap').forEach(wrap=>{
   const tip=wrap.querySelector('.tip');
   const vline=wrap.querySelector('.vline');
   const svg=wrap.querySelector('svg');
-  const n=wp.length; const pad=10, W=760;
+  const n=wp.length;
+  const pad=10, W=760;
   function showAt(clientX){
     const rect=svg.getBoundingClientRect();
     const xRaw=Math.max(pad, Math.min(W-pad, (clientX - rect.left)/rect.width * W));
-    const idx=Math.max(0,Math.min(n-1, Math.round((xRaw-pad)/(W-2*pad)*(n-1))));
-    const x = pad + idx/(n>1?n-1:1)*(W-2*pad);
-    const p=wp[idx]; const elapsed=times[idx];
-    let line1, spikeCls='';
+    let idx=Math.max(0,Math.min(n-1, Math.round((xRaw-pad)/(W-2*pad)*(n-1))));
+    let x = pad + idx/(n>1?n-1:1)*(W-2*pad);
+    // snap to nearest kill if close (within ~30 viewBox units ≈ 4% width)
+    try{
+      const kills=JSON.parse(wrap.dataset.killsDetail||wrap.dataset.kills_detail||"[]");
+      let best=null, bestDist=30;
+      for(const k of kills){
+        const d=Math.abs(k.x - xRaw);
+        if(d<bestDist){ bestDist=d; best=k; }
+      }
+      if(best){
+        x=best.x;
+        // find closest tick to this kill for P value
+        idx=Math.max(0,Math.min(n-1, Math.round((x-pad)/(W-2*pad)*(n-1))));
+      }
+    }catch(e){}
+    const p=wp[idx];
+    const elapsed=times[idx];
+    let line1, line2, spikeCls='';
     if(plant!==null && elapsed>=plant){
       const spikeRem=Math.max(0,45-(elapsed-plant));
-      line1=`<span class="t-main" style="color:#fbbf24">SPIKE ${fmt(spikeRem)}</span> <span class="t-sub">(+${fmt(elapsed-plant)} · ${fmt(elapsed)} elapsed)</span>`; spikeCls=' spike';
+      const spikeElapsed=elapsed-plant;
+      line1=`<span class="t-main" style="color:#fbbf24">SPIKE ${fmt(spikeRem)}</span> <span class="t-sub">(+${fmt(spikeElapsed)} elapsed)</span>`;
+      spikeCls=' spike';
     } else {
-      const remain=Math.max(0,100-elapsed);
+      const remain=Math.max(0,100 - elapsed);
       line1=`<span class="t-main">${fmt(remain)}</span> <span class="t-sub">remaining · ${fmt(elapsed)} elapsed</span>`;
     }
-    const delta= idx>0 ? (p - wp[idx-1]) : 0;
-    const dstr= idx>0 ? (delta>=0?` <span style="color:#4ade80">▲${(delta*100).toFixed(1)}%</span>`:` <span style="color:#f87171">▼${(Math.abs(delta)*100).toFixed(1)}%</span>`) : '';
-    const line2=`P(A) ${(p*100).toFixed(1)}%${dstr}`;
-    tip.innerHTML=line1+`<br>`+line2; tip.className='tip'+spikeCls;
-    tip.style.left=(x/W*100)+'%'; tip.style.top='8px'; tip.style.display='block';
-    vline.style.left=(x/W*100)+'%'; vline.style.display='block';
+    const delta = idx>0 ? (p - wp[idx-1]) : 0;
+    const dstr = idx>0 ? (delta>=0?` <span style="color:#4ade80">▲${(delta*100).toFixed(1)}%</span>`:` <span style="color:#f87171">▼${(Math.abs(delta)*100).toFixed(1)}%</span>`) : '';
+    let killInfo='';
+    try{
+      const kills=JSON.parse(wrap.dataset.killsDetail||"[]");
+      let bestK=null, bestD=30;
+      const curX = pad + idx/(n>1?n-1:1)*(W-2*pad);
+      for(const k of kills){
+        const d=Math.abs(k.x - curX);
+        if(d<bestD){ bestD=d; bestK=k; }
+      }
+      if(bestK) killInfo=` · <span style="color:#f87171">${bestK.killer} → ${bestK.victim}</span> @${bestK.t}s`;
+    }catch(e){}
+    line2=`P(A) ${(p*100).toFixed(1)}%${dstr}${killInfo}`;
+    tip.innerHTML=line1+`<br>`+line2;
+    tip.className='tip'+spikeCls;
+    tip.style.left=(x/W*100)+'%';
+    tip.style.top='8px';
+    tip.style.display='block';
+    vline.style.left=(x/W*100)+'%';
+    vline.style.display='block';
   }
   wrap.addEventListener('mousemove', e=>showAt(e.clientX));
   wrap.addEventListener('mouseleave', ()=>{ tip.style.display='none'; vline.style.display='none'; });
