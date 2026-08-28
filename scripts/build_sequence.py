@@ -14,8 +14,24 @@ OUT = ROOT / "data" / "sequences.npz"
 TICK_SEC = 5.0
 TMAX = 44
 NPLAYERS = 10
-F = 18
-MAPS = ["ascent", "split", "haven", "sunset", "summit", "lotus"]
+MAPS = ["ascent", "split", "haven", "sunset", "summit", "lotus", "breeze", "pearl", "fracture", "bind", "abyss"]
+
+# Ability mapping: per-ability independent (each rib ability is its own feature per team)
+# Keeps stars and nebula-dissipate separate, as requested
+_ABILITY_MAP_PATH = ROOT / "references" / "ability_category.json"
+if _ABILITY_MAP_PATH.exists():
+    _ABILITY_MAP = json.loads(_ABILITY_MAP_PATH.read_text())
+else:
+    _ABILITY_MAP = {}
+# Use grouped categories (15 cats -> 30 dims) to keep memory feasible
+# Per-ability independent (120*2=240) would be 9GB for 19k rounds -> OOM on CPU
+# So we keep grouped + 2 interaction dims (post×vipers-pit)
+ABILITY_CATS = sorted(set(_ABILITY_MAP.values())) if _ABILITY_MAP else []
+ABILITIES = ABILITY_CATS
+N_ABILITIES = len(ABILITY_CATS)
+N_ABILITY_CATS = N_ABILITIES
+N_INTERACTION = 2
+F = 18 + N_ABILITIES * 2 + N_INTERACTION  # 18+30+2=50
 FREEZE_FALLBACK_MS = 8000
 FREEZE_TIMEOUT_CUTOFF_MS = 90000
 
@@ -35,8 +51,6 @@ def build_round(rd, rnd, bx, by, span_x, span_y, actors, roster):
         return None
     duration = rnd["durationMs"]
     freeze_end = rnd.get("freezetimeEndT") or 0
-    if freeze_end > FREEZE_TIMEOUT_CUTOFF_MS:
-        return None
     kills = [
         {
             "t": e["t"],
@@ -50,12 +64,19 @@ def build_round(rd, rnd, bx, by, span_x, span_y, actors, roster):
     plant_ms = next((e["t"] for e in rnd["events"] if e["type"] == "plant"), None)
     meta = {"roundNum": rnd["roundNum"], "startMs": max(freeze_end / 1000.0 + TICK_SEC, TICK_SEC) * 1000.0, "kills": kills, "plantMs": plant_ms}
     ev_by_actor = {}
+    ability_events = []
     for e in rnd["events"]:
         if e["type"] == "snapshot":
             ev_by_actor.setdefault(e["actorId"], []).append(e)
+        elif e["type"] == "ability":
+            ability_events.append(e)
     for lst in ev_by_actor.values():
         lst.sort(key=lambda e: e["t"])
+    ability_events.sort(key=lambda e: e["t"])
     states = {a: rnd["playerStates"].get(a, []) for a in actors}
+
+    # Pre-index abilities (per-ability independent)
+    abil_to_idx = {a: i for i, a in enumerate(ABILITIES)}
 
     seq = np.zeros((TMAX, NPLAYERS, F), dtype=np.float32)
     mask = np.zeros(TMAX, dtype=np.float32)
@@ -71,6 +92,34 @@ def build_round(rd, rnd, bx, by, span_x, span_y, actors, roster):
         alive_a = sum(1 for f, a in zip(alive_flags, actors) if f and roster[a]["team"] == "A")
         alive_b = sum(1 for f, a in zip(alive_flags, actors) if f and roster[a]["team"] == "B")
         adv = (alive_a - alive_b) / 5.0
+
+        # Ability counts per team per ability (independent, stars vs nebula kept separate)
+        cnt_a = [0.0] * N_ABILITIES
+        cnt_b = [0.0] * N_ABILITIES
+        if ABILITIES:
+            for ab in ability_events:
+                if ab["t"] > t_ms:
+                    break
+                abil = ab.get("ability")
+                idx = abil_to_idx.get(abil)
+                if idx is None:
+                    continue
+                team = roster.get(str(ab.get("actorId")), {}).get("team")
+                if team == "A":
+                    cnt_a[idx] += 1.0
+                elif team == "B":
+                    cnt_b[idx] += 1.0
+            cnt_a = [c / 5.0 for c in cnt_a]
+            cnt_b = [c / 5.0 for c in cnt_b]
+            ability_feat = cnt_a + cnt_b
+            # Interaction: post-plant × vipers-pit (rare high-leverage ult) per team
+            # Handles both "vipers-pit" and "viper's-pit" name variants
+            pit_idxs = [abil_to_idx.get("vipers-pit"), abil_to_idx.get("viper's-pit")]
+            pit_idxs = [i for i in pit_idxs if i is not None]
+            pit_a = sum(cnt_a[i] for i in pit_idxs) if pit_idxs else 0.0
+            pit_b = sum(cnt_b[i] for i in pit_idxs) if pit_idxs else 0.0
+            ability_feat += [is_post * pit_a, is_post * pit_b]
+
         for pi, actor in enumerate(actors):
             st = state_at(states[actor], t_ms)
             alive = alive_flags[pi]
@@ -90,7 +139,10 @@ def build_round(rd, rnd, bx, by, span_x, span_y, actors, roster):
             else:
                 xn = yn = sx = sy = 0.0
             base = (xn, yn, sx, sy, 1.0 if alive else 0.0, hp, armor, eco, 1.0 if roster[actor]["team"] == "A" else 0.0, money, adv, is_post)
-            seq[k, pi] = base + tuple(w_onehot)
+            feat = base + tuple(w_onehot)
+            if ABILITIES:
+                feat = feat + tuple(ability_feat)
+            seq[k, pi] = feat
         mask[k] = 1.0
         k += 1
         t_sec += TICK_SEC

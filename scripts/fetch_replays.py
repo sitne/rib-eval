@@ -28,6 +28,15 @@ def open_session(pw):
     return browser, page
 
 
+def discover_max_id(page):
+    # matchesページ内の href="/matches/{id}" から最大IDを推定（LLMが877を知らなくても自動で上限がわかる）
+    try:
+        ids = page.evaluate("""() => Array.from(document.querySelectorAll('a[href*="/matches/"]')).map(a => { const m = a.getAttribute('href').match(/\\/matches\\/(\\d+)/); return m ? parseInt(m[1],10) : null; }).filter(n => n)""")
+        return max(ids) if ids else 0
+    except Exception:
+        return 0
+
+
 def probe(page, match_id):
     res = page.evaluate(FETCH_JS, f"https://rib.gg/api/matches/{match_id}/replay-data?mapId={match_id}-m1")
     return res["status"] == 200
@@ -35,7 +44,7 @@ def probe(page, match_id):
 
 def fetch_match(page, match_id):
     got = []
-    for mi in range(1, 4):
+    for mi in range(1, 6):
         map_id = f"{match_id}-m{mi}"
         out = CACHE / f"{map_id}.json"
         if out.exists():
@@ -75,6 +84,18 @@ def main():
                     if str(mid) not in ids:
                         ids.append(str(mid))
                 time.sleep(0.3)
+        elif not ids:
+            # --scanも--matchesも無しなら自動で上限を推定して全件走査
+            max_id = discover_max_id(page)
+            if max_id:
+                print(f"auto-discovered max_id={max_id}, scanning 1..{max_id+1}", flush=True)
+                for mid in range(1, max_id + 1):
+                    if probe(page, str(mid)):
+                        print(f"[hit] {mid}", flush=True)
+                        ids.append(str(mid))
+                    time.sleep(0.3)
+            else:
+                print("auto-discover failed, use --scan LO HI", flush=True)
         if args.limit:
             ids = ids[: args.limit]
         total = 0

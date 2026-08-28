@@ -55,6 +55,8 @@ def run(tag, map_filter, data, epochs=20, batch=128, lr=1e-3, seed=42):
     dev = "cuda" if torch.cuda.is_available() else "cpu"
     X, mask, y, at, maps, matches = data
     sel = np.ones(len(y), dtype=bool) if map_filter is None else (maps == map_filter)
+    # infer feature dim (supports ability-augmented F)
+    F_in = int(X.shape[-1]) if hasattr(X, "shape") else 18
 
     Xs, Ms, ys, ats, mts = X[sel], mask[sel], y[sel], at[sel], matches[sel]
     uniq = sorted(set(mts))
@@ -74,7 +76,7 @@ def run(tag, map_filter, data, epochs=20, batch=128, lr=1e-3, seed=42):
     yv = ys[va]
     avv = torch.tensor(ats[va].astype(np.int64), device=dev)
 
-    model = WinPredictor().to(dev)
+    model = WinPredictor(f=F_in).to(dev)
     opt = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=1e-4)
     lossf = nn.BCEWithLogitsLoss(reduction="none")
 
