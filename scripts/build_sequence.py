@@ -156,9 +156,14 @@ def main():
     meta_path = ROOT / "data" / "rounds_meta.jsonl"
     meta_f = open(meta_path, "w")
     for f in sorted(CACHE.glob("*.json")):
+        if f.name == "known_ids.json":
+            continue
         try:
-            rd = json.loads(f.read_text())["replayData"]
-        except (json.JSONDecodeError, KeyError):
+            j = json.loads(f.read_text())
+            rd = j["replayData"] if isinstance(j, dict) and isinstance(j.get("replayData"), dict) else None
+        except (json.JSONDecodeError, KeyError, OSError):
+            continue
+        if rd is None:
             continue
         if rd["map"] not in MAPS:
             continue

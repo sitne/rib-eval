@@ -128,11 +128,16 @@ def main():
     X, y, meta, match_ids = [], [], [], []
     files = sorted(CACHE.glob("*.json"))
     for f in files:
+        if f.name == "known_ids.json":
+            continue
         match_id = f.stem.split("-")[0]
         try:
             replay = json.loads(f.read_text())
-        except json.JSONDecodeError:
-            print(f"[skip] {f.name}: invalid json")
+            if not isinstance(replay, dict) or not isinstance(replay.get("replayData"), dict):
+                print(f"[skip] {f.name}: unexpected structure ({type(replay).__name__})")
+                continue
+        except (json.JSONDecodeError, OSError) as e:
+            print(f"[skip] {f.name}: {str(e)[:80]}")
             continue
         r, l, m = round_rows(replay, match_id)
         X += r
