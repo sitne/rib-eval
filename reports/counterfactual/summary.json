@@ -1,5 +1,5 @@
 {
-  "model": "/home/sitne/code/rib-eval/models/eval_pooled.onnx",
+  "model": "models/eval_pooled.onnx",
   "feature_order": "build_dataset.py:160 (t,attacker,per-player 80,team6,occ72)",
   "conditional": {
     "alive_equal": {
@@ -13,14 +13,14 @@
       "std": 0.2757389545440674
     },
     "eco_high": {
-      "n": 0,
-      "mean": null,
-      "std": null
+      "n": 310443,
+      "mean": 0.5021243095397949,
+      "std": 0.3120858371257782
     },
     "time_early": {
-      "n": 20,
-      "mean": 0.3916632831096649,
-      "std": 0.20745894312858582
+      "n": 108774,
+      "mean": 0.5027714967727661,
+      "std": 0.25042441487312317
     },
     "alive_equal+hp_high": {
       "n": 135354,
