@@ -4,6 +4,7 @@ data/replays/
 data/raw/
 data/*.npz
 data/rounds_meta.jsonl
+data/cache/
 outputs/*.pt
 outputs/*.json
 nohup.out
