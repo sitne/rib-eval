@@ -591,8 +591,8 @@ def main():
     for filt in [
         ({"alive_equal": True}, "alive_equal"),
         ({"hp_band": (0.5, 1.0)}, "hp_high"),
-        ({"eco_band": (0.5, 1.0)}, "eco_high"),
-        ({"time_band": (0, 30)}, "time_early"),
+        ({"eco_band": (0.15, 0.4)}, "eco_high"),
+        ({"time_band": (30, 60)}, "time_early"),
         ({"alive_equal": True, "hp_band": (0.5, 1.0)}, "alive_equal+hp_high"),
     ]:
         res = conditional_inference(filt[0])
@@ -686,7 +686,7 @@ def main():
 
     # 5. 出力 summary.json
     summary = {
-        "model": MODEL_PATH,
+        "model": str(Path(MODEL_PATH).relative_to(ROOT)) if Path(MODEL_PATH).is_absolute() else str(MODEL_PATH),
         "feature_order": "build_dataset.py:160 (t,attacker,per-player 80,team6,occ72)",
         "conditional": cond_results,
         "counterfactual_sample": {"base_idx": int(sample_idx), "base_p": base_p, "swap_delta": swap_res["delta"], "give_delta": give_res["delta"]},
