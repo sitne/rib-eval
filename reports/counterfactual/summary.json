@@ -1,0 +1,252 @@
+{
+  "model": "/home/sitne/code/rib-eval/models/eval_pooled.onnx",
+  "feature_order": "build_dataset.py:160 (t,attacker,per-player 80,team6,occ72)",
+  "conditional": {
+    "alive_equal": {
+      "n": 153603,
+      "mean": 0.5011817216873169,
+      "std": 0.15628689527511597
+    },
+    "hp_high": {
+      "n": 249652,
+      "mean": 0.504266083240509,
+      "std": 0.2757389545440674
+    },
+    "eco_high": {
+      "n": 0,
+      "mean": null,
+      "std": null
+    },
+    "time_early": {
+      "n": 20,
+      "mean": 0.3916632831096649,
+      "std": 0.20745894312858582
+    },
+    "alive_equal+hp_high": {
+      "n": 135354,
+      "mean": 0.502292811870575,
+      "std": 0.15728729963302612
+    }
+  },
+  "counterfactual_sample": {
+    "base_idx": 0,
+    "base_p": 0.46995627880096436,
+    "swap_delta": -0.09783941507339478,
+    "give_delta": -0.00532609224319458
+  },
+  "pairwise": {
+    "ascent": {
+      "pairs": 2000,
+      "cells_nonzero": 33,
+      "mean_abs_delta": 0.010576907394899943
+    },
+    "bind": {
+      "pairs": 2000,
+      "cells_nonzero": 35,
+      "mean_abs_delta": 0.014798307297613124
+    },
+    "breeze": {
+      "pairs": 2000,
+      "cells_nonzero": 34,
+      "mean_abs_delta": 0.011829485819977
+    },
+    "fracture": {
+      "pairs": 2000,
+      "cells_nonzero": 33,
+      "mean_abs_delta": 0.007928837149679444
+    },
+    "haven": {
+      "pairs": 2000,
+      "cells_nonzero": 35,
+      "mean_abs_delta": 0.009831393252059168
+    },
+    "lotus": {
+      "pairs": 2000,
+      "cells_nonzero": 33,
+      "mean_abs_delta": 0.008530557224263961
+    },
+    "pearl": {
+      "pairs": 2000,
+      "cells_nonzero": 33,
+      "mean_abs_delta": 0.009107424357789929
+    },
+    "split": {
+      "pairs": 2000,
+      "cells_nonzero": 35,
+      "mean_abs_delta": 0.014807306762390752
+    },
+    "summit": {
+      "pairs": 2000,
+      "cells_nonzero": 32,
+      "mean_abs_delta": 0.013760803348710963
+    },
+    "sunset": {
+      "pairs": 2000,
+      "cells_nonzero": 33,
+      "mean_abs_delta": 0.011879791891980854
+    }
+  },
+  "conversion_failures": [
+    {
+      "file": "/home/sitne/code/rib-eval/data/cache/rib_284_284-m3.json",
+      "roundNum": 1,
+      "ability_t": 7041,
+      "t_sec": 7.041,
+      "has_occ_change": false,
+      "has_kill": false
+    },
+    {
+      "file": "/home/sitne/code/rib-eval/data/cache/rib_284_284-m3.json",
+      "roundNum": 1,
+      "ability_t": 23029,
+      "t_sec": 23.029,
+      "has_occ_change": false,
+      "has_kill": false
+    },
+    {
+      "file": "/home/sitne/code/rib-eval/data/cache/rib_284_284-m3.json",
+      "roundNum": 1,
+      "ability_t": 23840,
+      "t_sec": 23.84,
+      "has_occ_change": false,
+      "has_kill": false
+    },
+    {
+      "file": "/home/sitne/code/rib-eval/data/cache/rib_284_284-m3.json",
+      "roundNum": 1,
+      "ability_t": 38083,
+      "t_sec": 38.083,
+      "has_occ_change": false,
+      "has_kill": false
+    },
+    {
+      "file": "/home/sitne/code/rib-eval/data/cache/rib_284_284-m3.json",
+      "roundNum": 1,
+      "ability_t": 65810,
+      "t_sec": 65.81,
+      "has_occ_change": false,
+      "has_kill": false
+    },
+    {
+      "file": "/home/sitne/code/rib-eval/data/cache/rib_284_284-m3.json",
+      "roundNum": 1,
+      "ability_t": 72061,
+      "t_sec": 72.061,
+      "has_occ_change": false,
+      "has_kill": false
+    },
+    {
+      "file": "/home/sitne/code/rib-eval/data/cache/rib_284_284-m3.json",
+      "roundNum": 1,
+      "ability_t": 74648,
+      "t_sec": 74.648,
+      "has_occ_change": false,
+      "has_kill": false
+    },
+    {
+      "file": "/home/sitne/code/rib-eval/data/cache/rib_284_284-m3.json",
+      "roundNum": 1,
+      "ability_t": 92448,
+      "t_sec": 92.448,
+      "has_occ_change": false,
+      "has_kill": false
+    },
+    {
+      "file": "/home/sitne/code/rib-eval/data/cache/rib_284_284-m3.json",
+      "roundNum": 1,
+      "ability_t": 205400,
+      "t_sec": 205.4,
+      "has_occ_change": false,
+      "has_kill": false
+    },
+    {
+      "file": "/home/sitne/code/rib-eval/data/cache/rib_284_284-m3.json",
+      "roundNum": 1,
+      "ability_t": 233608,
+      "t_sec": 233.608,
+      "has_occ_change": false,
+      "has_kill": false
+    },
+    {
+      "file": "/home/sitne/code/rib-eval/data/cache/rib_284_284-m3.json",
+      "roundNum": 1,
+      "ability_t": 233987,
+      "t_sec": 233.987,
+      "has_occ_change": false,
+      "has_kill": false
+    },
+    {
+      "file": "/home/sitne/code/rib-eval/data/cache/rib_284_284-m3.json",
+      "roundNum": 1,
+      "ability_t": 234457,
+      "t_sec": 234.457,
+      "has_occ_change": false,
+      "has_kill": false
+    },
+    {
+      "file": "/home/sitne/code/rib-eval/data/cache/rib_284_284-m3.json",
+      "roundNum": 1,
+      "ability_t": 244026,
+      "t_sec": 244.026,
+      "has_occ_change": false,
+      "has_kill": false
+    },
+    {
+      "file": "/home/sitne/code/rib-eval/data/cache/rib_284_284-m3.json",
+      "roundNum": 1,
+      "ability_t": 269449,
+      "t_sec": 269.449,
+      "has_occ_change": false,
+      "has_kill": false
+    },
+    {
+      "file": "/home/sitne/code/rib-eval/data/cache/rib_284_284-m3.json",
+      "roundNum": 1,
+      "ability_t": 269682,
+      "t_sec": 269.682,
+      "has_occ_change": false,
+      "has_kill": false
+    },
+    {
+      "file": "/home/sitne/code/rib-eval/data/cache/rib_284_284-m3.json",
+      "roundNum": 1,
+      "ability_t": 269980,
+      "t_sec": 269.98,
+      "has_occ_change": false,
+      "has_kill": false
+    },
+    {
+      "file": "/home/sitne/code/rib-eval/data/cache/rib_284_284-m3.json",
+      "roundNum": 1,
+      "ability_t": 270270,
+      "t_sec": 270.27,
+      "has_occ_change": false,
+      "has_kill": false
+    },
+    {
+      "file": "/home/sitne/code/rib-eval/data/cache/rib_284_284-m3.json",
+      "roundNum": 1,
+      "ability_t": 270512,
+      "t_sec": 270.512,
+      "has_occ_change": false,
+      "has_kill": false
+    },
+    {
+      "file": "/home/sitne/code/rib-eval/data/cache/rib_284_284-m3.json",
+      "roundNum": 1,
+      "ability_t": 271056,
+      "t_sec": 271.056,
+      "has_occ_change": false,
+      "has_kill": false
+    },
+    {
+      "file": "/home/sitne/code/rib-eval/data/cache/rib_284_284-m3.json",
+      "roundNum": 1,
+      "ability_t": 271056,
+      "t_sec": 271.056,
+      "has_occ_change": false,
+      "has_kill": false
+    }
+  ],
+  "conversion_failures_total": 100
+}
